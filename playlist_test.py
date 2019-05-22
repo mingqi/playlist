@@ -75,11 +75,11 @@ class TestPlaylist(unittest.TestCase):
         obj = json.loads(output.getvalue())
         self.assertEqual(len(obj['users']), 1)
         self.assertEqual(obj['users'][0]['id'], '1')
-        self.assertEqual(len(obj['playlist']), 2)
-        self.assertEqual(obj['playlist'][0]['id'], '2')
-        self.assertEqual(obj['playlist'][0]['song_ids'], ['1', '2'])
-        self.assertEqual(obj['playlist'][1]['id'], '3')
-        self.assertEqual(obj['playlist'][1]['song_ids'], ['1', '2'])
+        self.assertEqual(len(obj['playlists']), 2)
+        self.assertEqual(obj['playlists'][0]['id'], '2')
+        self.assertEqual(obj['playlists'][0]['song_ids'], ['1', '2'])
+        self.assertEqual(obj['playlists'][1]['id'], '3')
+        self.assertEqual(obj['playlists'][1]['song_ids'], ['1', '2'])
 
     def test_input_valiate(self):
         p = PlayList()
@@ -179,20 +179,23 @@ class TestPlaylist(unittest.TestCase):
         with self.assertRaises(PlayListException):
             p.apply_changes(StringIO(change))
 
-
-    def test_upper(self):
-        self.assertEqual('foo'.upper(), 'FOO')
-
-    def test_isupper(self):
-        self.assertTrue('FOO'.isupper())
-        self.assertFalse('Foo'.isupper())
-
-    def test_split(self):
-        s = 'hello world'
-        self.assertEqual(s.split(), ['hello', 'world'])
-        # check that s.split fails when the separator is not a string
-        with self.assertRaises(TypeError):
-            s.split(2)
+    def test_not_allow_duplicate_song_in_playlist(self):
+        change = """
+            [
+                {
+                    "type": "add_song_to_playlist",
+                    "playlist_id": "1",
+                    "song_ids" : ["1"]
+                }
+            ]
+        """
+        p = PlayList()
+        p.load_data(StringIO(INPUT))
+        p.apply_changes(StringIO(change))
+        output = StringIO()
+        p.gen_output(output)
+        obj = json.loads(output.getvalue())
+        self.assertEqual(len(obj['playlists'][0]['song_ids']), 2)
 
 if __name__ == '__main__':
     unittest.main()

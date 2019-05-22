@@ -116,6 +116,10 @@ class PlayList(object):
         for playlist in data['playlists']:
             if playlist['user_id'] not in self._users:
                 raise PlayListException('user_id %s not exists' % (playlist['user_id']))
+
+            if len(playlist['song_ids']) == 0:
+                raise PlayListException("at least one existing song in playlist %s" % (playlist['id']))
+
             for song_id in playlist['song_ids']:
                 if song_id not in self._songs:
                     raise PlayListException('song_id %s not exists' % (song_id))
@@ -149,7 +153,7 @@ class PlayList(object):
         out_obj = {
             'users': [],
             'songs': [],
-            'playlist': []
+            'playlists': []
         }
 
         for user_id in sorted(self._users.keys()):
@@ -159,7 +163,7 @@ class PlayList(object):
             out_obj['songs'].append(self._songs[song_id])
 
         for playlist_id in sorted(self._playlists.keys()):
-            out_obj['playlist'].append(self._playlists[playlist_id])
+            out_obj['playlists'].append(self._playlists[playlist_id])
 
         file.write(unicode(json.dumps(out_obj, ensure_ascii=False, indent=4, sort_keys=True)))
 
@@ -173,10 +177,14 @@ class PlayList(object):
         if playlist_id not in self._playlists:
             raise PlayListException('playlist %s not exists' % (playlist_id))
 
+        if len(change['song_ids']) == 0:
+            raise PlayListException("at least one existing song in playlist")
+
         for song_id in change['song_ids']:
             if song_id not in self._songs:
                 raise PlayListException('song %s not exists' % (song_id))
-            self._playlists[playlist_id]['song_ids'].append(song_id)
+            if song_id not in self._playlists[playlist_id]['song_ids']:
+                self._playlists[playlist_id]['song_ids'].append(song_id)
 
     def _remove_playlist(self, change):
         if change['playlist_id'] not in self._playlists:
@@ -184,26 +192,38 @@ class PlayList(object):
 
         del self._playlists[change['playlist_id']]
 
-    def _new_playlist(self, playlist):
-        playlist['id'] = self._get_next_playlist_id()
-        del playlist['type']
-        self._playlists[playlist['id']] = playlist
+    def _new_playlist(self, change):
+        change['id'] = self._get_next_playlist_id()
+        del change['type']
+        if len(change['song_ids']) == 0:
+            raise PlayListException("at least one existing song in playlist")
+
+        for song_id in change['song_ids']:
+            if song_id not in self._songs:
+                raise PlayListException('song %s not exists' % (song_id))
+        self._playlists[change['id']] = change
 
 
 def main():
     if len(sys.argv) != 4:
         print "playlist.py <input file> <change file> <output file>"
         sys.exit(1)
-    data_file_name, change_file_name, out_file_name = sys.argv[1:]
-    p = PlayList()
-    with io.open(data_file_name, mode='r', encoding='utf-8') as data_file:
-        p.load_data(data_file)
 
-    with io.open(change_file_name, mode='r', encoding='utf-8') as change_file:
-        p.apply_changes(change_file)
+    try:
+        data_file_name, change_file_name, out_file_name = sys.argv[1:]
+        p = PlayList()
+        with io.open(data_file_name, mode='r', encoding='utf-8') as data_file:
+            p.load_data(data_file)
 
-    with io.open(out_file_name, mode='w', encoding='utf-8') as out_file:
-        p.gen_output(out_file)
+        with io.open(change_file_name, mode='r', encoding='utf-8') as change_file:
+            p.apply_changes(change_file)
+
+        with io.open(out_file_name, mode='w', encoding='utf-8') as out_file:
+            p.gen_output(out_file)
+    except PlayListException as e:
+        print "failed to process: %s " % (e.message)
+        sys.exit(1)
+
 
 if __name__ == '__main__':
     # jsonschema.validate(instance={"name": 30, "price" : 34.99}, schema=schema)
